@@ -1,0 +1,469 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script>
+      const fetcher = (url) => {
+        return new Promise((resolve, reject) => {
+          setTimeout(() => {
+            if (url.makeError) {
+              reject(url.ctx + ",error");
+            }
+            resolve(url.ctx);
+          }, url.timeout * 1000);
+        });
+      };
+
+      // 限制并发数量的并发请求（返回的顺序对应）
+      const fetchQueue = async (urlsArr, fetcher) => {
+        // 并发读取远程URL
+        // const textPromises = urlsArr.map(fetch);
+        // 在urlsArr.map中放promise方法和async方法的区别：
+        // 本质上没有区别，都是返回promise对象。但是前者可能会reject，程序有可能会产生unhandledrejection错误。而后者有catch block 会处理错误。
+
+        // 按次序输出（继发）
+        // await 放for of 循环里 和 for await...of 的区别：
+        // 两者都是继发运行。前者可以处理每个循环变量的错误。后者当有一个出错时就会终止这个for...of循环
+
+        const res = await Promise.allSettled(
+          urlsArr.map((url) => fetcher(url))
+        );
+        return res.map((r) => {
+          return r.status === "fulfilled"
+            ? r.value
+            : r.status === "rejected"
+            ? r.reason
+            : "";
+        });
+      };
+
+      const getLimitUrls = (urlsArr, limit) => {
+        const storage = [];
+        do {
+          storage.push(urlsArr.splice(0, limit));
+        } while (urlsArr.length > limit);
+
+        if (urlsArr.length > 0) {
+          storage.push(urlsArr);
+        }
+        return storage;
+      };
+
+      const mapLimit = async (urlsArr, limit, fetcher) => {
+        const results = [];
+        const urlGroup = getLimitUrls(urlsArr, limit);
+        for (const [key, urlsArr] of Object.entries(urlGroup)) {
+          console.time(key);
+          results.push(await fetchQueue(urlsArr, fetcher));
+          console.timeLog(key);
+        }
+        return results;
+      };
+      // console.time("mapLimit");
+      // mapLimit(
+      //   [
+      //     {
+      //       ctx: "a",
+      //       timeout: 1,
+      //     },
+      //     {
+      //       ctx: "b",
+      //       timeout: 2,
+      //       makeError: true,
+      //     },
+      //     {
+      //       ctx: "c",
+      //       timeout: 3,
+      //     },
+      //     {
+      //       ctx: "d",
+      //       timeout: 2,
+      //     },
+      //     {
+      //       ctx: "e",
+      //       timeout: 2,
+      //     },
+      //     {
+      //       ctx: "f",
+      //       timeout: 2,
+      //       makeError: true,
+      //     },
+      //     {
+      //       ctx: "g",
+      //       timeout: 4,
+      //     },
+      //     {
+      //       ctx: "h",
+      //       timeout: 3,
+      //     },
+      //     {
+      //       ctx: "i",
+      //       timeout: 1,
+      //     },
+      //     {
+      //       ctx: "j",
+      //       timeout: 2,
+      //       makeError: true,
+      //     },
+      //     {
+      //       ctx: "k",
+      //       timeout: 5,
+      //     },
+      //     {
+      //       ctx: "l",
+      //       timeout: 6,
+      //     },
+      //     {
+      //       ctx: "m",
+      //       timeout: 5,
+      //       makeError: true,
+      //     },
+      //     {
+      //       ctx: "n",
+      //       timeout: 4,
+      //     },
+      //   ],
+      //   3
+      // ).then((ret) => {
+      //   console.timeLog("mapLimit");
+      //   console.log(ret);
+      // });
+    </script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/spark-md5/2.0.1/spark-md5.min.js"></script>
+  </head>
+  <body>
+    <section>
+      <p>单文件表单上传：</p>
+      <form
+        method="post"
+        action="http://localhost:8100/single"
+        enctype="multipart/form-data"
+      >
+        <label for="single_file">选择文件：</label>
+        <input type="file" name="f1" id="single_file" />
+        <label for="single_name">标题：</label>
+        <input type="text" name="title" id="single_name" />
+        <button type="submit">上 传</button>
+      </form>
+    </section>
+
+    <section>
+      <p>多文件表单上传：</p>
+      <form
+        method="post"
+        action="http://localhost:8100/multiple"
+        enctype="multipart/form-data"
+      >
+        <label for="multiple_file">选择文件：</label>
+        <input type="file" name="f1" id="multiple_file" multiple />
+        <label for="multiple_file">标题：</label>
+        <input type="text" name="title" id="multiple_name" />
+        <button type="submit">上 传</button>
+      </form>
+    </section>
+
+    <section>
+      <p>fetch上传：</p>
+
+      <label for="fetch_file">选择文件：</label>
+      <input type="file" name="f1" id="fetch_file" multiple />
+      <label for="fetch_name">标题：</label>
+      <input type="text" name="title" id="fetch_name" />
+      <button id="btn-fetch">上 传</button>
+      <script>
+        // fetch 上传图片
+        document.getElementById("btn-fetch").addEventListener("click", () => {
+          const fileList = document.getElementById("fetch_file").files;
+          if (!fileList.length) {
+            alert("请选择文件");
+            return;
+          }
+          const fd = new FormData(); //构造FormData对象
+          fd.append("title", document.getElementById("fetch_name").value);
+
+          //多文件上传需要遍历添加到 fromdata 对象
+          for (let i = 0; i < fileList.length; i++) {
+            fd.append("f1", fileList[i]); //支持多文件上传
+          }
+          console.log(fd);
+          fetch("http://localhost:8100/multiple", {
+            method: "POST",
+            body: fd,
+          })
+            .then(response.json())
+            .then((response) => {
+              console.log(response);
+            })
+            .catch((error) => {
+              console.error("Error:", error);
+            });
+        });
+      </script>
+    </section>
+
+    <section>
+      <style>
+        .img-box {
+          display: flex;
+        }
+        .img-box img {
+          margin: 0 10px;
+          width: 200px;
+        }
+      </style>
+      <p>多文件多进度上传：</p>
+
+      <label for="progress_file">添加文件</label>
+      <input type="file" id="progress_file" multiple />
+      <div class="img-box"></div>
+      <button type="button" id="btn-submit">上 传</button>
+      <script>
+        {
+          const imgBox = document.getElementsByClassName("img-box")[0];
+          const willUploadFile = []; //保存待上传的文件以及相关附属信息
+          document
+            .getElementById("progress_file")
+            .addEventListener("change", function (e) {
+              const fileList = document.getElementById("progress_file").files;
+              console.log("fileList", fileList);
+              for (let i = 0; i < fileList.length; i++) {
+                const file = fileList[i];
+                const img = document.createElement("img");
+                const item = document.createElement("div");
+                const progress = document.createElement("div");
+                const clear = document.createElement("button");
+                progress.className = "progress";
+                progress.innerHTML = `<span class="progress"></span><button type="button">Abort</button>`;
+                clear.innerHTML = "clear";
+                clear.addEventListener("click", (e) => {
+                  willUploadFile.splice(i, 1, null);
+                  imgBox.removeChild(item);
+                });
+                progress.appendChild(clear);
+
+                item.className = "item";
+                img.src = window.URL.createObjectURL(file);
+                img.onload = function () {
+                  //显示要是否这块儿内存
+                  window.URL.revokeObjectURL(this.src);
+                };
+
+                item.appendChild(img);
+                item.appendChild(progress);
+                imgBox.appendChild(item);
+
+                willUploadFile.push({
+                  file,
+                  progress,
+                });
+              }
+            });
+
+          function xhrSend({ file, progress }) {
+            return new Promise((resolve, reject) => {
+              const progressSpan = progress.firstElementChild;
+              const btnCancel = progress.getElementsByTagName("button")[0];
+              const abortFn = function () {
+                if (xhr && xhr.readyState !== 4) {
+                  //取消上传
+                  xhr.abort();
+                  reject("user abort");
+                }
+              };
+
+              btnCancel.addEventListener("click", abortFn, { once: true });
+
+              const fd = new FormData(); //构造FormData对象
+              fd.append("f1", file);
+
+              const xhr = new XMLHttpRequest(); //创建对象
+              xhr.open("POST", "http://localhost:8100/multiple", true);
+
+              xhr.onreadystatechange = () => {
+                console.log("state change", xhr.readyState);
+                //调用 abort 后，state 立即变成了4,并不会变成0
+                //增加自定义属性  xhr.uploaded
+                if (xhr.readyState == 4 && xhr.uploaded) {
+                  const obj = JSON.parse(xhr.responseText); //返回值
+                  console.log(obj);
+                  if (obj) {
+                    resolve(obj);
+                    // alert("上传成功");
+                  }
+                }
+              };
+
+              xhr.onerror = (e) => {
+                reject(e);
+              };
+
+              xhr.onprogress = updateProgress;
+              xhr.upload.onprogress = updateProgress;
+              function updateProgress(event) {
+                if (event.lengthComputable) {
+                  const completedPercent = (
+                    (event.loaded / event.total) *
+                    100
+                  ).toFixed(2);
+                  progressSpan.innerHTML = completedPercent + "%";
+                  if (completedPercent >= 100) {
+                    xhr.uploaded = true;
+                  }
+                }
+              }
+              //注意 send 一定要写在最下面，否则 onprogress 只会执行最后一次 也就是100%的时候
+              xhr.send(fd);
+            });
+          }
+
+          //文件上传
+          function submitUpload(willFiles) {
+            if (!willFiles.length) {
+              return;
+            }
+            // 限制上传数量的并发上传，返回的顺序不变
+            mapLimit(willFiles, 2, xhrSend).then((ret) => console.log(ret));
+          }
+          //绑定提交事件
+          document
+            .getElementById("btn-submit")
+            .addEventListener("click", function () {
+              submitUpload(willUploadFile.filter((f) => f));
+            });
+        }
+      </script>
+    </section>
+
+    <section>
+      <p>分片断点续传上传：</p>
+      <label for="chunk_file">选择文件：</label>
+      <input type="file" name="f1" id="chunk_file" multiple />
+      <label for="chunk_name">标题：</label>
+      <input type="text" name="chunk_name" id="chunk_name" />
+      <button id="btn-submit-chunk">上 传</button>
+      <script>
+        function submitUpload() {
+          const file = document.getElementById("chunk_file").files[0];
+          const fileReader = new FileReader();
+
+          const chunkSize = (1024 * 1024) / 2; //分片大小 0.5M
+          const chunks = {}; //保存分片数据
+          const chunkCount = Math.ceil(file.size / chunkSize);
+
+          let token = +new Date(); //时间戳
+          let name = file.name;
+          let sendChunkCount = 0;
+          let currentChunk = 0;
+
+          let start = 0;
+          let end = 0;
+
+          fileReader.onload = function (e) {
+            console.log("read chunk nr", currentChunk + 1, "of", chunkCount);
+
+            currentChunk++;
+
+            // 如果当前分片已经上传，处理下一个分片
+            if (
+              localStorage.getItem(SparkMD5.ArrayBuffer.hash(e.target.result))
+            ) {
+              console.log((e.target.result, " loaded"));
+              if (currentChunk < chunkCount) {
+                loadNext();
+              }
+              return;
+            }
+
+            if (chunks[start]) {
+              chunks[start].buffer = e.target.result;
+            }
+
+            if (currentChunk < chunkCount) {
+              loadNext();
+            } else {
+              // 限制分片上传数量
+              mapLimit(
+                Object.entries(chunks).map(([key, entry]) => ({
+                  key,
+                  entry,
+                })),
+                2,
+                ({ key, entry }) => {
+                  console.log("key", key);
+                  const fd = new FormData();
+
+                  fd.append("token", token);
+
+                  fd.append("f1", entry.blob);
+                  fd.append("index", key);
+
+                  return xhrSend(fd).then((res) => {
+                    sendChunkCount += 1;
+                    localStorage.setItem(
+                      SparkMD5.ArrayBuffer.hash(entry.buffer),
+                      true
+                    );
+                    if (sendChunkCount === Object.keys(chunks).length) {
+                      //上传完成，发送合并请求
+                      console.log("上传完成，发送合并请求");
+                      var formD = new FormData();
+                      formD.append("type", "merge");
+                      formD.append("token", token);
+                      formD.append("chunkCount", Object.keys(chunks).length);
+                      formD.append("filename", name);
+                      xhrSend(formD);
+                    }
+                    return res;
+                  });
+                }
+              ).then((ret) => console.log(ret));
+            }
+          };
+
+          fileReader.onerror = function () {
+            console.warn("oops, something went wrong.");
+          };
+
+          function loadNext() {
+            start = currentChunk * chunkSize;
+            end =
+              start + chunkSize >= file.size ? file.size : start + chunkSize;
+            console.log(start, end);
+            chunks[start] = {
+              blob: file.slice(start, end),
+            };
+            fileReader.readAsArrayBuffer(
+              File.prototype.slice.call(file, start, end)
+            );
+          }
+
+          loadNext();
+        }
+
+        function xhrSend(fd, cb) {
+          return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest(); //创建对象
+            xhr.open("POST", "http://localhost:8100/chunk", true);
+            xhr.onreadystatechange = function () {
+              // console.log("state change", xhr.readyState);
+              if (xhr.readyState == 4) {
+                console.log(xhr.responseText);
+                resolve(xhr.responseText);
+              }
+            };
+            xhr.onerror = (e) => {
+              reject(e);
+            };
+            xhr.send(fd); //发送
+          });
+        }
+
+        //绑定提交事件
+        document
+          .getElementById("btn-submit-chunk")
+          .addEventListener("click", submitUpload);
+      </script>
+    </section>
+  </body>
+</html>

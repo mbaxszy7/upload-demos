@@ -1,0 +1,25 @@
+{
+  "name": "upload-demos",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mbaxszy7/upload-demos.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mbaxszy7/upload-demos/issues"
+  },
+  "homepage": "https://github.com/mbaxszy7/upload-demos#readme",
+  "dependencies": {
+    "koa-body": "^4.2.0",
+    "koa-mount": "^4.0.0",
+    "koa-static": "^5.0.0",
+    "koa2": "^2.0.0-alpha.7"
+  }
+}
